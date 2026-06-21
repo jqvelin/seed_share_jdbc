@@ -1,0 +1,221 @@
+package com.seedshare.service;
+
+import com.seedshare.dao.ExchangeDao;
+import com.seedshare.dao.ExchangeItemDao;
+import com.seedshare.dao.GardenerDao;
+import com.seedshare.dao.PlantDao;
+import com.seedshare.dao.PlantIssueDao;
+import com.seedshare.dao.SeedDao;
+import com.seedshare.dao.VarietyDao;
+import com.seedshare.model.Exchange;
+import com.seedshare.model.ExchangeItem;
+import com.seedshare.model.Gardener;
+import com.seedshare.model.Plant;
+import com.seedshare.model.PlantIssue;
+import com.seedshare.model.Seed;
+import com.seedshare.model.Variety;
+
+import java.math.BigDecimal;
+import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.List;
+
+public class CrudDemoService {
+
+    private final GardenerDao gardenerDao = new GardenerDao();
+    private final PlantDao plantDao = new PlantDao();
+    private final VarietyDao varietyDao = new VarietyDao();
+    private final SeedDao seedDao = new SeedDao();
+    private final ExchangeDao exchangeDao = new ExchangeDao();
+    private final ExchangeItemDao exchangeItemDao = new ExchangeItemDao();
+    private final PlantIssueDao plantIssueDao = new PlantIssueDao();
+
+    public void demoCreate() throws SQLException {
+        System.out.println("=== CREATE — Создание записей ===");
+
+        long suffix = System.currentTimeMillis() % 100000;
+
+        Gardener gardener = new Gardener("Тестовый_Садовод_" + suffix, BigDecimal.valueOf(4.40));
+        int gardenerId = gardenerDao.insert(gardener);
+        System.out.printf("Создан садовод: id=%d, %s%n", gardenerId, gardener.getUsername());
+
+        Plant plant = new Plant("Тестовое растение " + suffix);
+        int plantId = plantDao.insert(plant);
+        System.out.printf("Создано растение: id=%d, %s%n", plantId, plant.getName());
+
+        Variety variety = new Variety(plantId, "Тестовый сорт " + suffix, "Солнце, умеренный полив", BigDecimal.valueOf(4.30));
+        int varietyId = varietyDao.insert(variety);
+        System.out.printf("Создан сорт: id=%d, %s%n", varietyId, variety.getName());
+
+        boolean linked = plantIssueDao.insert(new PlantIssue(plantId, 1, "Промывание листьев и мыльный раствор"));
+        System.out.printf("Связь с проблемой создана: %b%n", linked);
+
+        Seed seed = new Seed(varietyId, gardenerId, 2024, "Собран на учебной грядке", 3);
+        int seedId = seedDao.insert(seed);
+        System.out.printf("Добавлены семена: id=%d, пакетиков=%d%n", seedId, seed.getPacketsCount());
+
+        Exchange exchange = new Exchange(false, "mail");
+        int exchangeId = exchangeDao.insert(exchange);
+        exchangeItemDao.insert(new ExchangeItem(exchangeId, seedId, 1));
+        System.out.printf("Создан обмен: id=%d, доставка=%s%n", exchangeId, exchange.getDeliveryMethod());
+
+        System.out.println();
+    }
+
+    public void demoRead() throws SQLException {
+        System.out.println("=== READ — Чтение данных ===");
+
+        System.out.println("Все садоводы:");
+        System.out.printf("%-5s %-24s %-8s%n", "ID", "Username", "Рейтинг");
+        for (Gardener gardener : gardenerDao.findAll()) {
+            System.out.printf("%-5d %-24s %-8s%n",
+                    gardener.getId(),
+                    truncate(gardener.getUsername(), 23),
+                    gardener.getRating());
+        }
+
+        System.out.println("\nВсе растения:");
+        System.out.printf("%-5s %-24s%n", "ID", "Название");
+        for (Plant plant : plantDao.findAll()) {
+            System.out.printf("%-5d %-24s%n", plant.getId(), truncate(plant.getName(), 23));
+        }
+
+        System.out.println("\nВсе сорта:");
+        System.out.printf("%-5s %-8s %-24s %-8s%n", "ID", "Plant", "Название", "Рейтинг");
+        for (Variety variety : varietyDao.findAll()) {
+            System.out.printf("%-5d %-8d %-24s %-8s%n",
+                    variety.getId(),
+                    variety.getPlantId(),
+                    truncate(variety.getName(), 23),
+                    variety.getRating());
+        }
+
+        System.out.println("\nПоиск садовода по id=1:");
+        gardenerDao.findById(1).ifPresentOrElse(
+                System.out::println,
+                () -> System.out.println("Не найден")
+        );
+
+        System.out.println("\nПоиск садовода по username=Елена_Садовод:");
+        gardenerDao.findByUsername("Елена_Садовод").ifPresentOrElse(
+                System.out::println,
+                () -> System.out.println("Не найден")
+        );
+
+        System.out.println("\nПоиск связи растение-проблема: plant=1, issue=1:");
+        plantIssueDao.findByKey(1, 1).ifPresentOrElse(
+                System.out::println,
+                () -> System.out.println("Не найдено")
+        );
+
+        System.out.println();
+    }
+
+    public void demoUpdate() throws SQLException {
+        System.out.println("=== UPDATE — Обновление данных ===");
+
+        gardenerDao.findById(1).ifPresent(gardener -> {
+            BigDecimal oldRating = gardener.getRating();
+            gardener.setRating(BigDecimal.valueOf(4.95));
+            try {
+                boolean ok = gardenerDao.update(gardener);
+                System.out.printf("Обновлён рейтинг садовода id=1: %s -> %s (успех=%b)%n",
+                        oldRating, gardener.getRating(), ok);
+            } catch (SQLException e) {
+                System.out.println("Ошибка обновления: " + e.getMessage());
+            }
+        });
+
+        varietyDao.findById(1).ifPresent(variety -> {
+            String oldName = variety.getName();
+            String newName = oldName.endsWith(" учебный") ? oldName : oldName + " учебный";
+            variety.setName(newName);
+            try {
+                boolean ok = varietyDao.update(variety);
+                System.out.printf("Обновлён сорт id=1: '%s' -> '%s' (успех=%b)%n",
+                        oldName, variety.getName(), ok);
+            } catch (SQLException e) {
+                System.out.println("Ошибка обновления: " + e.getMessage());
+            }
+        });
+
+        System.out.println();
+    }
+
+    public void demoDelete() throws SQLException {
+        System.out.println("=== DELETE — Удаление данных ===");
+
+        long suffix = System.currentTimeMillis() % 100000;
+        Gardener temp = new Gardener("Удалить_" + suffix, BigDecimal.valueOf(3.50));
+        int tempId = gardenerDao.insert(temp);
+        System.out.printf("Создан временный садовод id=%d%n", tempId);
+
+        boolean deleted = gardenerDao.delete(tempId);
+        System.out.printf("Удалён садовод id=%d (успех=%b)%n", tempId, deleted);
+
+        boolean notFound = gardenerDao.delete(99999);
+        System.out.printf("Удаление несуществующего id=99999 (успех=%b)%n", notFound);
+
+        System.out.println();
+    }
+
+    public void demoBatchInsert() throws SQLException {
+        System.out.println("=== BATCH INSERT — Массовая вставка ===");
+
+        long suffix = System.currentTimeMillis() % 100000;
+        Plant plant = new Plant("Batch растение " + suffix);
+        int plantId = plantDao.insert(plant);
+        System.out.printf("Создано растение: id=%d, %s%n", plantId, plant.getName());
+
+        List<PlantIssue> items = new ArrayList<>();
+        items.add(new PlantIssue(plantId, 1, "Мыльный раствор"));
+        items.add(new PlantIssue(plantId, 6, "Бордоская жидкость"));
+        items.add(new PlantIssue(plantId, 7, "Опрыскивание серой"));
+
+        long start = System.nanoTime();
+        int inserted = plantIssueDao.batchInsert(items);
+        long elapsed = (System.nanoTime() - start) / 1_000_000;
+        System.out.printf("Вставлено %d связей за %d мс%n", inserted, elapsed);
+
+        plantDao.delete(plantId);
+        System.out.printf("Растение id=%d удалено, связи удалены каскадно%n", plantId);
+
+        System.out.println();
+    }
+
+    public void demoTransaction() throws SQLException {
+        System.out.println("=== TRANSACTION — Регистрация обмена ===");
+        System.out.println("Попытка создать обмен: seed=1 (1 пакетик) и seed=4 (1 пакетик)");
+
+        Integer exchangeId = null;
+        try {
+            exchangeId = exchangeItemDao.registerExchange("courier", 1, 1, 4, 1);
+            System.out.printf("Обмен создан! id=%d%n", exchangeId);
+            System.out.println("Позиции обмена:");
+            for (ExchangeItem item : exchangeItemDao.findByExchange(exchangeId)) {
+                System.out.printf("seed=%d, packets=%d%n", item.getSeedId(), item.getPacketsCount());
+            }
+
+            System.out.println("Повторная попытка с заведомо большим количеством пакетиков...");
+            try {
+                exchangeItemDao.registerExchange("courier", 1, 999, 4, 999);
+            } catch (SQLException e) {
+                System.out.printf("Ожидаемая ошибка: %s%n", e.getMessage());
+            }
+        } finally {
+            if (exchangeId != null) {
+                exchangeItemDao.deleteExchangeWithRestock(exchangeId);
+                System.out.printf("Тестовый обмен id=%d удалён, пакетики восстановлены%n", exchangeId);
+            }
+        }
+
+        System.out.println();
+    }
+
+    public static String truncate(String s, int max) {
+        if (s == null) {
+            return "";
+        }
+        return s.length() > max ? s.substring(0, max - 1) + "…" : s;
+    }
+}
