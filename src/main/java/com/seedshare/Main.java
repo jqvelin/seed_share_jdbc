@@ -61,7 +61,7 @@ public class Main {
                     > """);
 
             switch (scanner.nextLine().trim()) {
-                case "1" -> crudDemo.demoCreate();
+                case "1" -> crudDemo.demoCreateInteractive(scanner);
                 case "2" -> crudDemo.demoRead();
                 case "3" -> crudDemo.demoUpdate();
                 case "4" -> crudDemo.demoDelete();

@@ -19,6 +19,7 @@ import java.math.BigDecimal;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Scanner;
 
 public class CrudDemoService {
 
@@ -60,6 +61,36 @@ public class CrudDemoService {
         System.out.printf("Создан обмен: id=%d, доставка=%s%n", exchangeId, exchange.getDeliveryMethod());
 
         System.out.println();
+    }
+
+    public void demoCreateInteractive(Scanner scanner) throws SQLException {
+        while (true) {
+            System.out.print("""
+                    === CREATE — Что добавить? ===
+                    [1] Садовод
+                    [2] Растение
+                    [3] Сорт
+                    [4] Семена
+                    [5] Обмен
+                    [6] Связь растение-проблема
+                    [7] Позиция обмена
+                    [0] Назад
+                    > """);
+
+            switch (scanner.nextLine().trim()) {
+                case "1" -> createGardener(scanner);
+                case "2" -> createPlant(scanner);
+                case "3" -> createVariety(scanner);
+                case "4" -> createSeed(scanner);
+                case "5" -> createExchange(scanner);
+                case "6" -> createPlantIssue(scanner);
+                case "7" -> createExchangeItem(scanner);
+                case "0" -> {
+                    return;
+                }
+                default -> System.out.println("Неверный выбор.");
+            }
+        }
     }
 
     public void demoRead() throws SQLException {
@@ -217,5 +248,132 @@ public class CrudDemoService {
             return "";
         }
         return s.length() > max ? s.substring(0, max - 1) + "…" : s;
+    }
+
+    private void createGardener(Scanner scanner) throws SQLException {
+        System.out.println("=== Новый садовод ===");
+        System.out.print("Username: ");
+        String username = scanner.nextLine().trim();
+        BigDecimal rating = readBigDecimal(scanner, "Рейтинг");
+        Gardener gardener = new Gardener(username, rating);
+        int id = gardenerDao.insert(gardener);
+        System.out.printf("Создан садовод: id=%d, %s%n%n", id, gardener.getUsername());
+    }
+
+    private void createPlant(Scanner scanner) throws SQLException {
+        System.out.println("=== Новое растение ===");
+        System.out.print("Название растения: ");
+        String name = scanner.nextLine().trim();
+        Plant plant = new Plant(name);
+        int id = plantDao.insert(plant);
+        System.out.printf("Создано растение: id=%d, %s%n%n", id, plant.getName());
+    }
+
+    private void createVariety(Scanner scanner) throws SQLException {
+        System.out.println("=== Новый сорт ===");
+        int plantId = readInt(scanner, "ID растения");
+        System.out.print("Название сорта: ");
+        String name = scanner.nextLine().trim();
+        System.out.print("Условия выращивания: ");
+        String conditions = scanner.nextLine().trim();
+        BigDecimal rating = readBigDecimal(scanner, "Рейтинг");
+        Variety variety = new Variety(plantId, name, conditions, rating);
+        int id = varietyDao.insert(variety);
+        System.out.printf("Создан сорт: id=%d, %s%n%n", id, variety.getName());
+    }
+
+    private void createSeed(Scanner scanner) throws SQLException {
+        System.out.println("=== Новая запись о семенах ===");
+        int varietyId = readInt(scanner, "ID сорта");
+        int gardenerId = readInt(scanner, "ID садовода");
+        Integer harvestYear = readOptionalInt(scanner, "Год сбора");
+        System.out.print("Происхождение: ");
+        String lineage = scanner.nextLine().trim();
+        int packetsCount = readInt(scanner, "Количество пакетиков");
+        Seed seed = new Seed(varietyId, gardenerId, harvestYear, lineage, packetsCount);
+        int id = seedDao.insert(seed);
+        System.out.printf("Добавлены семена: id=%d, пакетиков=%d%n%n", id, seed.getPacketsCount());
+    }
+
+    private void createExchange(Scanner scanner) throws SQLException {
+        System.out.println("=== Новый обмен ===");
+        boolean completed = readBoolean(scanner, "Обмен завершён");
+        System.out.print("Способ доставки (in_person/mail/courier/pickup_point/other): ");
+        String deliveryMethod = scanner.nextLine().trim();
+        Exchange exchange = new Exchange(completed, deliveryMethod);
+        int id = exchangeDao.insert(exchange);
+        System.out.printf("Создан обмен: id=%d, доставка=%s%n%n", id, exchange.getDeliveryMethod());
+    }
+
+    private void createPlantIssue(Scanner scanner) throws SQLException {
+        System.out.println("=== Новая связь растение-проблема ===");
+        int plantId = readInt(scanner, "ID растения");
+        int issueId = readInt(scanner, "ID проблемы");
+        System.out.print("Лечение: ");
+        String treatment = scanner.nextLine().trim();
+        boolean created = plantIssueDao.insert(new PlantIssue(plantId, issueId, treatment));
+        System.out.printf("Связь создана: %b%n%n", created);
+    }
+
+    private void createExchangeItem(Scanner scanner) throws SQLException {
+        System.out.println("=== Новая позиция обмена ===");
+        int exchangeId = readInt(scanner, "ID обмена");
+        int seedId = readInt(scanner, "ID семян");
+        int packetsCount = readInt(scanner, "Количество пакетиков");
+        boolean created = exchangeItemDao.insert(new ExchangeItem(exchangeId, seedId, packetsCount));
+        System.out.printf("Позиция обмена создана: %b%n%n", created);
+    }
+
+    private int readInt(Scanner scanner, String label) {
+        while (true) {
+            System.out.print(label + ": ");
+            String value = scanner.nextLine().trim();
+            try {
+                return Integer.parseInt(value);
+            } catch (NumberFormatException e) {
+                System.out.println("Введите целое число.");
+            }
+        }
+    }
+
+    private Integer readOptionalInt(Scanner scanner, String label) {
+        while (true) {
+            System.out.print(label + " (Enter если пусто): ");
+            String value = scanner.nextLine().trim();
+            if (value.isEmpty()) {
+                return null;
+            }
+            try {
+                return Integer.parseInt(value);
+            } catch (NumberFormatException e) {
+                System.out.println("Введите целое число или оставьте поле пустым.");
+            }
+        }
+    }
+
+    private BigDecimal readBigDecimal(Scanner scanner, String label) {
+        while (true) {
+            System.out.print(label + ": ");
+            String value = scanner.nextLine().trim().replace(',', '.');
+            try {
+                return new BigDecimal(value);
+            } catch (NumberFormatException e) {
+                System.out.println("Введите число.");
+            }
+        }
+    }
+
+    private boolean readBoolean(Scanner scanner, String label) {
+        while (true) {
+            System.out.print(label + " [y/N]: ");
+            String value = scanner.nextLine().trim().toLowerCase();
+            if (value.isEmpty() || value.equals("n") || value.equals("no") || value.equals("н") || value.equals("нет")) {
+                return false;
+            }
+            if (value.equals("y") || value.equals("yes") || value.equals("д") || value.equals("да")) {
+                return true;
+            }
+            System.out.println("Введите y/yes/да или n/no/нет.");
+        }
     }
 }
